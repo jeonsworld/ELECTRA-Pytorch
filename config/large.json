@@ -1,0 +1,14 @@
+{
+  "act_fn": "gelu",
+  "dropout_prob": 0.1,
+  "hidden_size": 1024,
+  "embedding_size": 1024,
+  "initializer_range": 0.02,
+  "num_heads": 16,
+  "max_position_embeddings": 512,
+  "num_hidden_layers": 24,
+  "type_vocab_size": 2,
+  "disc_weight": 50.0,
+  "vocab_size": 32000,
+  "generator_decay": 4
+}
