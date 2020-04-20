@@ -317,47 +317,6 @@ class Encoder(nn.Module):
         return hidden_states
 
 
-class PredictionHeadTransform(nn.Module):
-    def __init__(self, config):
-        super(PredictionHeadTransform, self).__init__()
-        self.dense = Linear(config.hidden_size, config.hidden_size)
-        self.act_fn = ACT2FN[config.act_fn]
-        self.LayerNorm = LayerNorm(config.hidden_size, eps=1e-12)
-
-    def forward(self, hidden_states):
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.act_fn(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states)
-        return hidden_states
-
-
-class LMPredictionHead(nn.Module):
-    def __init__(self, config, embedding_weights):
-        super(LMPredictionHead, self).__init__()
-        self.transform = PredictionHeadTransform(config)
-        self.decoder = Linear(embedding_weights.size(1),
-                              embedding_weights.size(0),
-                              bias=False)
-        self.decoder.weight = embedding_weights
-        self.bias = nn.Parameter(torch.zeros(embedding_weights.size(0)))
-
-    def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states)
-        hidden_states = self.decoder(hidden_states) + self.bias
-        return hidden_states
-
-
-class PreTrainingHeads(nn.Module):
-    def __init__(self, config, embedding_weights):
-        super(PreTrainingHeads, self).__init__()
-        self.predictions = LMPredictionHead(config, embedding_weights)
-
-    def forward(self, sequence_output):
-        prediction_scores = self.predictions(sequence_output)
-
-        return prediction_scores
-
-
 class ElectraModel(nn.Module):
     def __init__(self, config):
         super().__init__()
