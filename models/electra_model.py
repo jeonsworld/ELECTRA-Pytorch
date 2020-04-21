@@ -345,10 +345,12 @@ class ElectraModel(nn.Module):
 
 
 class ElectraGeneratorPredictionHeads(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, embedding_weights):
         super().__init__()
         self.transform = Linear(config.hidden_size, config.embedding_size)
-        self.dense = Linear(config.embedding_size, config.vocab_size)
+        self.dense = Linear(embedding_weights.size(1), embedding_weights.size(0), bias=False)
+        self.dense.weight = embedding_weights
+        self.bias = Parameter(torch.zeros(embedding_weights.size(0)))
 
         self.layer_norm = LayerNorm(config.embedding_size)
         self.act_fn = ACT2FN[config.act_fn]
@@ -357,7 +359,7 @@ class ElectraGeneratorPredictionHeads(nn.Module):
         hidden_states = self.transform(hidden_states)
         hidden_states = self.act_fn(hidden_states)
         hidden_states = self.layer_norm(hidden_states)
-        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dense(hidden_states) + self.bias
         return hidden_states
 
 
@@ -367,7 +369,7 @@ class ElectraGenerator(nn.Module):
         config.hidden_size //= config.generator_decay
         config.num_heads //= config.generator_decay
         self.model = ElectraModel(config)
-        self.predictions = ElectraGeneratorPredictionHeads(config)
+        self.predictions = ElectraGeneratorPredictionHeads(config, self.model.embeddings.word_embeddings.weight)
 
         self.vocab_size = config.vocab_size
 
