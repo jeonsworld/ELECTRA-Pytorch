@@ -345,7 +345,7 @@ class ElectraModel(nn.Module):
 
 
 class ElectraGeneratorPredictionHeads(nn.Module):
-    def __init__(self, config, embedding_projection_weight, embedding_weights):
+    def __init__(self, config):
         super().__init__()
         self.transform = Linear(config.hidden_size, config.embedding_size)
         self.dense = Linear(config.embedding_size, config.vocab_size)
@@ -360,14 +360,14 @@ class ElectraGeneratorPredictionHeads(nn.Module):
         hidden_states = self.dense(hidden_states)
         return hidden_states
 
+
 class ElectraGenerator(nn.Module):
     def __init__(self, config):
         super().__init__()
         config.hidden_size //= config.generator_decay
         config.num_heads //= config.generator_decay
         self.model = ElectraModel(config)
-        self.predictions = ElectraGeneratorPredictionHeads(config, self.model.embeddings_project.weight,
-                                                           self.model.embeddings.word_embeddings.weight)
+        self.predictions = ElectraGeneratorPredictionHeads(config)
 
         self.vocab_size = config.vocab_size
 
