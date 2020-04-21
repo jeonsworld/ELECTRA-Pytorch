@@ -27,6 +27,7 @@ from utils.schedulers import PolyWarmUpScheduler
 
 logger = logging.getLogger(__name__)
 
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -101,7 +102,7 @@ def train(args, model, tokenizer):
         train_dataloader = DataLoader(train_dataset,
                                       sampler=train_sampler,
                                       batch_size=args.train_batch_size,
-                                      num_workers=4,
+                                      num_workers=0,
                                       pin_memory=True)
         epoch_iterator = tqdm(train_dataloader,
                               desc="Training (X iter) (XX / XX Steps) (Total Loss=X.X)\
@@ -248,7 +249,7 @@ def main():
     set_seed(args)
 
     # Load pretrained model and tokenizer
-    tokenizer = BertTokenizer(vocab_file='data/vocab.txt', do_lower_case=args.do_lower_case,
+    tokenizer = BertTokenizer(vocab_file='dataset/wiki_vocab_32k_0213.txt', do_lower_case=args.do_lower_case,
                               max_len=args.max_seq_length, do_basic_tokenize=True)
     config = Config(args.config_file)
     model = Electra(config)

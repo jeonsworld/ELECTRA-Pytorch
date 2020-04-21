@@ -45,7 +45,6 @@ class BertLayerNorm(nn.Module):
         return FusedLayerNormAffineFunction.apply(
             x, self.weight, self.bias, self.shape, self.eps)
 
-
     def forward(self, x):
         if self.apex_enabled and not torch.jit.is_scripting():
             x = self.fused_layer_norm(x)
@@ -348,24 +347,18 @@ class ElectraModel(nn.Module):
 class ElectraGeneratorPredictionHeads(nn.Module):
     def __init__(self, config, embedding_projection_weight, embedding_weights):
         super().__init__()
-        self.transform = Linear(embedding_projection_weight.size(0), embedding_projection_weight.size(1), bias=False)
-        self.transform.weight.data = embedding_projection_weight.data.t()
-        self.transform_bias = Parameter(torch.zeros(embedding_projection_weight.size(1)))
-
-        self.dense = Linear(embedding_weights.size(1), embedding_weights.size(0), bias=False)
-        self.dense.weight.data = embedding_weights
-        self.dense_bias = Parameter(torch.zeros(embedding_weights.size(0)))
+        self.transform = Linear(config.hidden_size, config.embedding_size)
+        self.dense = Linear(config.embedding_size, config.vocab_size)
 
         self.layer_norm = LayerNorm(config.embedding_size)
         self.act_fn = ACT2FN[config.act_fn]
 
     def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states) + self.transform_bias
+        hidden_states = self.transform(hidden_states)
         hidden_states = self.act_fn(hidden_states)
         hidden_states = self.layer_norm(hidden_states)
-        hidden_states = self.dense(hidden_states) + self.dense_bias
+        hidden_states = self.dense(hidden_states)
         return hidden_states
-
 
 class ElectraGenerator(nn.Module):
     def __init__(self, config):
@@ -444,9 +437,9 @@ class Electra(nn.Module):
 
     def _sampling(self, input_ids, generator_logits, masked_lm_labels):
         generator_index = torch.argmax(generator_logits, dim=-1).detach()
-        # non_corrupt_label = (masked_lm_labels == -1)
-        # corrupt_label = (masked_lm_labels != -1)
-        # generator_index[non_corrupt_label] = input_ids[non_corrupt_label]
+        corrupt_label = (masked_lm_labels != -1)
+        input_ids = input_ids.clone()
+        input_ids[corrupt_label] = masked_lm_labels[corrupt_label]
         discriminator_label = Variable(torch.eq(generator_index, input_ids))
         return generator_index, discriminator_label
 
