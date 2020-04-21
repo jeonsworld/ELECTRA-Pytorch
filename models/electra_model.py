@@ -345,12 +345,11 @@ class ElectraModel(nn.Module):
 
 
 class ElectraGeneratorPredictionHeads(nn.Module):
-    def __init__(self, config, embedding_weights):
+    def __init__(self, config):
         super().__init__()
         self.transform = Linear(config.hidden_size, config.embedding_size)
-        self.dense = Linear(embedding_weights.size(1), embedding_weights.size(0), bias=False)
-        self.dense.weight = embedding_weights
-        self.bias = Parameter(torch.zeros(embedding_weights.size(0)))
+        self.dense = Linear(config.embedding_size, config.vocab_size, bias=False)
+        self.bias = Parameter(torch.zeros(config.vocab_size))
 
         self.layer_norm = LayerNorm(config.embedding_size)
         self.act_fn = ACT2FN[config.act_fn]
@@ -369,7 +368,7 @@ class ElectraGenerator(nn.Module):
         config.hidden_size //= config.generator_decay
         config.num_heads //= config.generator_decay
         self.model = ElectraModel(config)
-        self.predictions = ElectraGeneratorPredictionHeads(config, self.model.embeddings.word_embeddings.weight)
+        self.predictions = ElectraGeneratorPredictionHeads(config)
 
         self.vocab_size = config.vocab_size
 
@@ -424,7 +423,12 @@ class Electra(nn.Module):
         super().__init__()
         self.generator = ElectraGenerator(config)
         self.discriminator = ElectraDiscriminator(config)
+        self._tie_embeddings()
         self.apply(self._init_weights)
+
+    def _tie_embeddings(self):
+        self.generator.model.embeddings.word_embeddings.weight = self.discriminator.model.embeddings.word_embeddings.weight
+        self.generator.model.embeddings.word_embeddings.weight = self.generator.predictions.dense.weight
 
     def _init_weights(self, module):
         """
@@ -438,12 +442,14 @@ class Electra(nn.Module):
             module.weight.data.fill_(1.0)
 
     def _sampling(self, input_ids, generator_logits, masked_lm_labels):
-        generator_index = torch.argmax(generator_logits, dim=-1).detach()
+        generator_id = torch.argmax(generator_logits, dim=-1).detach()
+        origin_input = input_ids.clone()
+        fake_input = input_ids.clone()
+        fake_input = torch.where(masked_lm_labels < 0, fake_input, generator_id)
         corrupt_label = (masked_lm_labels != -1)
-        input_ids = input_ids.clone()
-        input_ids[corrupt_label] = masked_lm_labels[corrupt_label]
-        discriminator_label = Variable(torch.eq(generator_index, input_ids))
-        return generator_index, discriminator_label
+        origin_input[corrupt_label] = masked_lm_labels[corrupt_label]
+        discriminator_label = torch.eq(origin_input, fake_input)
+        return generator_id, discriminator_label
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None):
         generator_loss, generator_logits = self.generator(input_ids, token_type_ids, attention_mask, masked_lm_labels)
