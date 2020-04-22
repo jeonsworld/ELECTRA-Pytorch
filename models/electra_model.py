@@ -146,9 +146,8 @@ class Config(object):
                  dropout_prob=0.1,
                  max_position_embeddings=512,
                  type_vocab_size=2,
-                 disc_weight=50.0,
-                 initializer_range=0.02,
-                 generator_decay=4
+                 loss_weight=1.0,
+                 initializer_range=0.02
                  ):
         if isinstance(vocab_size_or_config_json_file, str):
             with open(vocab_size_or_config_json_file, "r", encoding='utf-8') as reader:
@@ -165,9 +164,8 @@ class Config(object):
             self.dropout_prob = dropout_prob
             self.max_position_embeddings = max_position_embeddings
             self.type_vocab_size = type_vocab_size
-            self.disc_weight = disc_weight
+            self.loss_weight = loss_weight
             self.initializer_range = initializer_range
-            self.generator_decay = generator_decay
         else:
             raise ValueError("First argument must be either a vocabulary size (int)"
                              "or the path to a pretrained model config file (str)")
@@ -365,8 +363,6 @@ class ElectraGeneratorPredictionHeads(nn.Module):
 class ElectraGenerator(nn.Module):
     def __init__(self, config):
         super().__init__()
-        config.hidden_size //= config.generator_decay
-        config.num_heads //= config.generator_decay
         self.model = ElectraModel(config)
         self.predictions = ElectraGeneratorPredictionHeads(config)
 
@@ -419,10 +415,10 @@ class ElectraDiscriminator(nn.Module):
 
 
 class Electra(nn.Module):
-    def __init__(self, config):
+    def __init__(self, generator_config, discriminator_config):
         super().__init__()
-        self.generator = ElectraGenerator(config)
-        self.discriminator = ElectraDiscriminator(config)
+        self.generator = ElectraGenerator(generator_config)
+        self.discriminator = ElectraDiscriminator(discriminator_config)
         self._tie_embeddings()
         self.apply(self._init_weights)
 
