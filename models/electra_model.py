@@ -365,7 +365,7 @@ class ElectraGenerator(nn.Module):
         super().__init__()
         self.model = ElectraModel(config)
         self.predictions = ElectraGeneratorPredictionHeads(config)
-
+        self.gen_weight = config.loss_weight
         self.vocab_size = config.vocab_size
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None):
@@ -375,6 +375,7 @@ class ElectraGenerator(nn.Module):
         if masked_lm_labels is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)
             masked_lm_loss = loss_fct(prediction_scores.view(-1, self.vocab_size), masked_lm_labels.view(-1))
+            masked_lm_loss *= self.gen_weight
             return masked_lm_loss, prediction_scores
         else:
             return prediction_scores
@@ -397,7 +398,7 @@ class ElectraDiscriminator(nn.Module):
         super().__init__()
         self.model = ElectraModel(config)
         self.predictions = ElectraDiscriminatorPredictionHeads(config)
-        self.discriminator_weight = config.disc_weight
+        self.discriminator_weight = config.loss_weight
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None):
         sequence_output = self.model(input_ids, token_type_ids, attention_mask)

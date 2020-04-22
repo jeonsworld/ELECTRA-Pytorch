@@ -21,7 +21,6 @@ from utils.optimization import AdamW, WarmupLinearSchedule
 from utils.tokenization import BertTokenizer
 from utils.pretrain_utils import LMDataset
 from models.electra_model import Config, Electra
-# from sftp import sftp_upload
 from apex.optimizers import FusedLAMB
 from utils.schedulers import PolyWarmUpScheduler
 
@@ -102,7 +101,7 @@ def train(args, model, tokenizer):
         train_dataloader = DataLoader(train_dataset,
                                       sampler=train_sampler,
                                       batch_size=args.train_batch_size,
-                                      num_workers=0,
+                                      num_workers=4,
                                       pin_memory=True)
         epoch_iterator = tqdm(train_dataloader,
                               desc="Training (X iter) (XX / XX Steps) (Total Loss=X.X)\
@@ -136,13 +135,13 @@ def train(args, model, tokenizer):
 
                 epoch_iterator.set_description(
                     "Training (%d iter) (%d / %d Steps) (Mean Loss=%2.5f) (Generator Loss=%2.5f) (Discriminator Loss=%2.5f)"
-                    % (iters, global_step, args.num_steps, mean_loss, gen_loss, disc_loss))
+                    % (iters, global_step, args.num_steps, mean_loss, gen_loss, disc_loss/50.0))
 
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     tb_writer.add_scalar('lr', scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar('Mean_Loss', mean_loss, global_step)
                     tb_writer.add_scalar('Gen_Loss', gen_loss, global_step)
-                    tb_writer.add_scalar('Disc_Loss', disc_loss, global_step)
+                    tb_writer.add_scalar('Disc_Loss', disc_loss/50.0, global_step)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     model_to_save = model.module if hasattr(model, 'module') else model
@@ -176,9 +175,12 @@ def main():
     parser.add_argument("--corpus_path", default=None, type=str, required=True,
                         help="The input training data file (a text file).")
     parser.add_argument("--model_name", type=str, required=True, help="model name")
-    parser.add_argument("--config_file", type=str, required=True, help="model configuration file")
+    parser.add_argument("--gen_config_file", type=str, required=True,
+                        help="generator model configuration file")
+    parser.add_argument("--disc_config_file", type=str, required=True,
+                        help="discriminator model configuration file")
 
-    ## Other parameters
+## Other parameters
     parser.add_argument("--output_dir", default='checkpoint', type=str,
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument("--do_lower_case", action='store_true',
@@ -251,18 +253,21 @@ def main():
     # Load pretrained model and tokenizer
     tokenizer = BertTokenizer(vocab_file='dataset/wiki_vocab_32k_0213.txt', do_lower_case=args.do_lower_case,
                               max_len=args.max_seq_length, do_basic_tokenize=True)
-    config = Config(args.config_file)
-    model = Electra(config)
+    generator_config = Config(args.gen_config_file)
+    discriminator_config = Config(args.disc_config_file)
+    model = Electra(generator_config, discriminator_config)
 
     gen_params = count_parameters(model.generator)
     disc_params = count_parameters(model.discriminator)
 
     logger.info("Generator Model Parameter: %d" % gen_params)
-    logger.info("Disrciminator Model Parameter: %d" % disc_params)
+    logger.info("Discriminator Model Parameter: %d" % disc_params)
 
+    logger.info("Generator Configuration: %s" % generator_config)
+    logger.info("Discriminator Configuration: %s" % discriminator_config)
     model.to(args.device)
 
-    args.vocab_size = config.vocab_size
+    args.vocab_size = generator_config.vocab_size
     logger.info("Training parameters %s", args)
 
     # Training
