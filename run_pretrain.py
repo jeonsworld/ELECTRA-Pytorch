@@ -206,7 +206,7 @@ def main():
     parser.add_argument("--warmup_steps", default=10000, type=int,
                         help="Linear warmup over warmup_steps.")
     parser.add_argument("--mask_prob", default=0.15, type=float,
-                        help="Masking probability (Small, Base=0.15 Large=0.2)")
+                        help="Masking probability (Small, Base=0.15 Large=0.25)")
 
     parser.add_argument('--logging_steps', type=int, default=8,
                         help="Log every X updates steps.")
